@@ -170,19 +170,45 @@ function FoodCard({ item, onAction, actionLabel = "Request Pickup", claimed }) {
 }
 
 // ─── Donor Form ───────────────────────────────────────────────────────────────
-function DonorModule({ onNotify }) {
-  const [form, setForm] = useState({ name: "", type: "veg", qty: "", address: "", expiry: "", category: "" });
+function DonorModule({ onNotify, onAddFood }) {
+  const [form, setForm] = useState({ name: "", type: "veg", qty: "", address: "", expiry: "", category: "", wasteCategory: "" });
   const [submitted, setSubmitted] = useState(false);
+
+  const expiryMap = {
+    "30 min": 30,
+    "1 hour": 60,
+    "2 hours": 120,
+    "6+ hours": 360,
+  };
 
   const handleSubmit = () => {
     if (!form.name || !form.qty || !form.address || !form.expiry) {
       onNotify("Please fill all required fields.");
       return;
     }
+
+    const newFood = {
+      id: Date.now(),
+      donor: form.name,
+      type: form.type,
+      qty: Number(form.qty),
+      location: form.address,
+      distance: Math.round((Math.random() * 6 + 0.8) * 10) / 10,
+      expiry: expiryMap[form.expiry] || 60,
+      status: "available",
+      rating: 4.7,
+      claimed: false,
+      category: form.category || "Cooked Meals",
+      wasteCategory: form.wasteCategory || "",
+      isWaste: !!form.wasteCategory,
+    };
+
+    onAddFood(newFood);
     setSubmitted(true);
-    onNotify("🎉 Food listing submitted! NGOs will be notified.");
+    const destination = form.wasteCategory ? "Recycle section" : "Find Food section";
+    onNotify(`🎉 Food listing submitted! It is now visible in ${destination}.`);
     setTimeout(() => setSubmitted(false), 3000);
-    setForm({ name: "", type: "veg", qty: "", address: "", expiry: "", category: "" });
+    setForm({ name: "", type: "veg", qty: "", address: "", expiry: "", category: "", wasteCategory: "" });
   };
 
   const inputStyle = {
@@ -242,6 +268,17 @@ function DonorModule({ onNotify }) {
             <option>Fast Food</option>
             <option>Snacks</option>
             <option>Beverages</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={labelStyle}>Food Status (for waste routing)</label>
+          <select style={{ ...inputStyle, appearance: "none" }} value={form.wasteCategory}
+            onChange={e => setForm(p => ({ ...p, wasteCategory: e.target.value }))}>
+            <option value="">Regular / Fresh Food</option>
+            <option value="Left Over Food">Left Over Food → Animal Feeders</option>
+            <option value="Spoiled Food">Spoiled Food → Composting</option>
+            <option value="Waste Food">Waste Food → Food Processing Units</option>
           </select>
         </div>
 
@@ -463,85 +500,138 @@ function VolunteerModule({ onNotify }) {
 }
 
 // ─── Waste Management ─────────────────────────────────────────────────────────
-function WasteModule({ onNotify }) {
-  const unclaimed = [
-    { id: 1, item: "Mixed Snacks", qty: 40, age: "3h unclaimed", donor: "Street Vendor" },
-    { id: 2, item: "Bakery Items", qty: 25, age: "2.5h unclaimed", donor: "City Bakery" },
-  ];
+function WasteModule({ food, onNotify }) {
+  const [requestedIds, setRequestedIds] = useState([]);
+
+  const wasteItems = food.filter(f => f.isWaste);
+  
+  const groupedByCategory = {
+    "Left Over Food": wasteItems.filter(f => f.wasteCategory === "Left Over Food"),
+    "Spoiled Food": wasteItems.filter(f => f.wasteCategory === "Spoiled Food"),
+    "Waste Food": wasteItems.filter(f => f.wasteCategory === "Waste Food"),
+  };
+
+  const destinations = {
+    "Left Over Food": { icon: "🐄", label: "Animal Feeders", color: "#fef9c3", textColor: "#92400e" },
+    "Spoiled Food": { icon: "🌱", label: "Composting", color: "#d1fae5", textColor: "#065f46" },
+    "Waste Food": { icon: "🏭", label: "Food Processing Units", color: "#f3f4f6", textColor: "#374151" },
+  };
+
+  const handleRequestPickup = (item) => {
+    setRequestedIds(prev => [...prev, item.id]);
+    const dest = destinations[item.wasteCategory];
+    onNotify(`📍 Pickup requested for ${item.donor}! Routing to ${dest.label}.`);
+  };
 
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
         <h2 style={{ fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>Waste Management</h2>
-        <p style={{ color: "#6b7280", fontSize: 14, marginTop: 4 }}>Redirect unclaimed food — nothing goes to waste</p>
+        <p style={{ color: "#6b7280", fontSize: 14, marginTop: 4 }}>Redirect food waste efficiently — nothing goes to waste</p>
       </div>
 
       {/* Flow diagram */}
       <div style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #e5e7eb", padding: 16, marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 12 }}>🔄 Smart Diversion Flow</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 12 }}>🔄 Smart Waste Routing</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
           {[
-            { label: "Donor", icon: "🏨", color: "#dbeafe" },
-            { label: "NGO Claim", icon: "🏢", color: "#dcfce7" },
+            { label: "Left Over", icon: "🐄", color: "#fef9c3" },
             { label: "Animal Feeders", icon: "🐄", color: "#fef9c3" },
-            { label: "Compost", icon: "🌱", color: "#d1fae5" },
           ].map((s, i) => (
-            <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ background: s.color, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
                 {s.icon} {s.label}
               </div>
-              {i < 3 && <span style={{ color: "#d1d5db", fontSize: 18 }}>→</span>}
+              {i === 0 && <span style={{ color: "#d1d5db", fontSize: 18 }}>→</span>}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {[
+            { label: "Spoiled", icon: "🌱", color: "#d1fae5" },
+            { label: "Composting", icon: "🌱", color: "#d1fae5" },
+          ].map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ background: s.color, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                {s.icon} {s.label}
+              </div>
+              {i === 0 && <span style={{ color: "#d1d5db", fontSize: 18 }}>→</span>}
+            </div>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+          {[
+            { label: "Waste", icon: "🏭", color: "#f3f4f6" },
+            { label: "Food Processing", icon: "🏭", color: "#f3f4f6" },
+          ].map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div style={{ background: s.color, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, color: "#374151" }}>
+                {s.icon} {s.label}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* Unclaimed listings */}
-      <h3 style={{ fontSize: 14, fontWeight: 700, color: "#374151", marginBottom: 12 }}>⚠️ Unclaimed Food — Needs Action</h3>
-
-      {unclaimed.map(u => (
-        <div key={u.id} style={{ background: "#fff", borderRadius: 14, border: "1.5px solid #fde68a", marginBottom: 12, overflow: "hidden" }}>
-          <div style={{ height: 3, background: "linear-gradient(90deg,#f59e0b,#f97316)" }} />
-          <div style={{ padding: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{u.item}</div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>{u.donor} · {u.age}</div>
-              </div>
-              <Badge color="#92400e" bg="#fef3c7">⏰ Unclaimed</Badge>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <button onClick={() => onNotify(`🐄 Redirected ${u.item} to animal feeders!`)} style={{
-                background: "#fef9c3", border: "1.5px solid #fde68a", borderRadius: 10,
-                padding: "10px", fontSize: 13, fontWeight: 600, color: "#92400e",
-                cursor: "pointer", fontFamily: "inherit",
-              }}>🐄 Animal Feeders</button>
-              <button onClick={() => onNotify(`🌱 ${u.item} marked for composting!`)} style={{
-                background: "#d1fae5", border: "1.5px solid #a7f3d0", borderRadius: 10,
-                padding: "10px", fontSize: 13, fontWeight: 600, color: "#065f46",
-                cursor: "pointer", fontFamily: "inherit",
-              }}>🌱 Compost</button>
+      {/* Waste items by category */}
+      {Object.entries(groupedByCategory).map(([category, items]) => {
+        if (items.length === 0) return null;
+        const dest = destinations[category];
+        return (
+          <div key={category}>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: "#374151", marginBottom: 12, marginTop: 20 }}>
+              {dest.icon} {category} → {dest.label}
+            </h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+              {items.map(item => (
+                <div key={item.id} style={{ background: "#fff", borderRadius: 14, border: `1.5px solid ${dest.color}`, overflow: "hidden" }}>
+                  <div style={{ height: 3, background: dest.color }} />
+                  <div style={{ padding: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{item.donor}</div>
+                        <div style={{ fontSize: 12, color: "#9ca3af" }}>{item.category || "Food Item"} · {item.qty} servings</div>
+                      </div>
+                      <Badge color={dest.textColor} bg={dest.color}>📍 {category}</Badge>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginBottom: 10, fontSize: 12, color: "#6b7280" }}>
+                      <span>📍 {item.location}</span>
+                      <span>•</span>
+                      <span>{item.distance} km away</span>
+                    </div>
+                    <button
+                      onClick={() => handleRequestPickup(item)}
+                      disabled={requestedIds.includes(item.id)}
+                      style={{
+                        width: "100%",
+                        background: requestedIds.includes(item.id) ? "#e5e7eb" : dest.color,
+                        color: requestedIds.includes(item.id) ? "#9ca3af" : dest.textColor,
+                        border: `1.5px solid ${dest.color}`,
+                        borderRadius: 10,
+                        padding: "10px",
+                        fontSize: 13,
+                        fontWeight: 600,
+                        cursor: requestedIds.includes(item.id) ? "default" : "pointer",
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      {requestedIds.includes(item.id) ? "✓ Pickup Requested" : "📦 Request Pickup"}
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
-      {/* Impact */}
-      <div style={{ background: "linear-gradient(135deg,#064e3b,#065f46)", borderRadius: 14, padding: 16, color: "#fff", marginTop: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>♻️ Waste Diverted This Month</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {[
-            { label: "To Animal Feeders", val: "2.8 Tons", icon: "🐄" },
-            { label: "Composted", val: "1.2 Tons", icon: "🌱" },
-          ].map(s => (
-            <div key={s.label} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: 12 }}>
-              <div style={{ fontSize: 22 }}>{s.icon}</div>
-              <div style={{ fontSize: 20, fontWeight: 800 }}>{s.val}</div>
-              <div style={{ fontSize: 11, opacity: 0.75 }}>{s.label}</div>
-            </div>
-          ))}
+      {wasteItems.length === 0 && (
+        <div style={{ background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 14, padding: 20, textAlign: "center", color: "#166534" }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>✨</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>No waste items yet</div>
+          <div style={{ fontSize: 12, color: "#4b5563", marginTop: 4 }}>Food waste items will appear here when donated</div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -635,7 +725,7 @@ function HomeModule({ setTab }) {
         <div style={{ position: "absolute", top: -20, right: -20, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
         <div style={{ position: "absolute", bottom: -30, right: 20, width: 80, height: 80, borderRadius: "50%", background: "rgba(74,222,128,0.15)" }} />
         <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.1em", opacity: 0.75, marginBottom: 6 }}>WELCOME TO</div>
-        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>Zero Hunger<br />Connect 🥘</div>
+        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.2, marginBottom: 8 }}>Feed Relay<br />Connect 🥘</div>
         <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.5 }}>Bridging surplus food to those who need it most — one meal at a time.</div>
         <button onClick={() => setTab("donor")} style={{ marginTop: 16, background: "#4ade80", color: "#1a5c3a", border: "none", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
           Donate Food Now →
@@ -698,12 +788,29 @@ function HomeModule({ setTab }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("home");
+  const [prevTab, setPrevTab] = useState(null);
   const [food, setFood] = useState(MOCK_FOOD);
   const [notification, setNotification] = useState(null);
 
   const notify = (msg) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 3500);
+  };
+
+  const changeTab = (newTab) => {
+    if (newTab !== tab) {
+      setPrevTab(tab);
+      setTab(newTab);
+    }
+  };
+
+  const goBack = () => {
+    if (prevTab && prevTab !== tab) {
+      setTab(prevTab);
+      setPrevTab(null);
+    } else {
+      setTab("home");
+    }
   };
 
   const tabs = [
@@ -720,9 +827,11 @@ export default function App() {
       fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif",
       minHeight: "100vh",
       background: "#f8fafc",
-      maxWidth: 480,
+      width: "100%",
+      maxWidth: "100%",
       margin: "0 auto",
       position: "relative",
+      padding: "0 12px",
     }}>
       <style>{`
         ${FONTS}
@@ -730,6 +839,61 @@ export default function App() {
         ::-webkit-scrollbar { display: none; }
         @keyframes slideUp { from { transform: translateX(-50%) translateY(20px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
         input:focus, select:focus, textarea:focus { border-color: #1a5c3a !important; box-shadow: 0 0 0 3px rgba(26,92,58,0.1) !important; }
+        .desktop-tabbar {
+          display: none;
+          gap: 8px;
+          margin: 0 0 18px;
+          width: 100%;
+          max-width: 100%;
+        }
+        .desktop-tabbar button {
+          flex: 1;
+          min-width: 110px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 12px 14px;
+          border-radius: 14px;
+          font-family: inherit;
+          transition: background 0.2s, color 0.2s, transform 0.2s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          color: #6b7280;
+        }
+        .desktop-tabbar button.active {
+          background: #d1fae5;
+          color: #065f46;
+          transform: translateY(-1px);
+        }
+        .bottom-nav {
+          position: fixed;
+          bottom: 0;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 100%;
+          max-width: 100%;
+          background: #fff;
+          border-top: 1px solid #f3f4f6;
+          display: flex;
+          padding: 8px 4px 16px;
+          box-shadow: 0 -4px 24px rgba(0,0,0,0.08);
+          z-index: 100;
+        }
+        @media (min-width: 768px) {
+          .desktop-tabbar {
+            display: flex;
+          }
+          .bottom-nav {
+            display: none;
+          }
+        }
+        @media (min-width: 1000px) {
+          .app-content {
+            padding-bottom: 24px !important;
+          }
+        }
       `}</style>
 
       {/* Header */}
@@ -739,43 +903,54 @@ export default function App() {
         display: "flex", alignItems: "center", justifyContent: "space-between",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {tab !== "home" && (
+            <button onClick={goBack} type="button" style={{
+              background: "#eef2ff", border: "none", borderRadius: 12,
+              padding: "8px 10px", color: "#1d4ed8", fontWeight: 700,
+              cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", gap: 6,
+            }}>
+              ← Back
+            </button>
+          )}
           <div style={{ width: 34, height: 34, background: "linear-gradient(135deg,#1a5c3a,#4ade80)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🥘</div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", lineHeight: 1 }}>Zero Hunger</div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", lineHeight: 1 }}>Feed Relay</div>
             <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 500 }}>Connect · Bangalore</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button style={{ background: "#fee2e2", border: "none", borderRadius: 10, padding: "6px 10px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#dc2626", fontWeight: 600 }}>
+          <button onClick={() => { changeTab("ngo"); notify("Showing urgent food listings now."); }} type="button" style={{ background: "#fee2e2", border: "none", borderRadius: 10, padding: "6px 10px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#dc2626", fontWeight: 600 }}>
             🔴 2 Urgent
           </button>
-          <div style={{ width: 34, height: 34, background: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", border: "1.5px solid #e5e7eb" }}>
+          <button onClick={() => notify("🔔 You have new notifications coming soon!")} type="button" style={{ width: 34, height: 34, background: "#f9fafb", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", border: "1.5px solid #e5e7eb" }}>
             🔔
-          </div>
+          </button>
         </div>
       </div>
 
+      <div className="desktop-tabbar">
+        {tabs.map(t => (
+          <button key={t.id} className={tab === t.id ? "active" : ""} onClick={() => changeTab(t.id)}>
+            <span style={{ fontSize: 16 }}>{t.icon}</span>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Content */}
-      <div style={{ padding: "20px 16px 100px" }}>
-        {tab === "home" && <HomeModule setTab={setTab} />}
-        {tab === "donor" && <DonorModule onNotify={notify} />}
-        {tab === "ngo" && <NGOModule food={food} setFood={setFood} onNotify={notify} />}
+      <div className="app-content" style={{ padding: "20px 16px 100px" }}>
+        {tab === "home" && <HomeModule setTab={changeTab} />}
+        {tab === "donor" && <DonorModule onNotify={notify} onAddFood={(item) => { setFood((prev) => [item, ...prev]); changeTab("ngo"); }} />}
+        {tab === "ngo" && <NGOModule food={food.filter(f => !f.isWaste)} setFood={setFood} onNotify={notify} />}
         {tab === "volunteer" && <VolunteerModule onNotify={notify} />}
-        {tab === "waste" && <WasteModule onNotify={notify} />}
+        {tab === "waste" && <WasteModule food={food} onNotify={notify} />}
         {tab === "ratings" && <RatingsModule onNotify={notify} />}
       </div>
 
       {/* Bottom Navigation */}
-      <div style={{
-        position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
-        width: "100%", maxWidth: 480,
-        background: "#fff", borderTop: "1px solid #f3f4f6",
-        display: "flex", padding: "8px 4px 16px",
-        boxShadow: "0 -4px 24px rgba(0,0,0,0.08)",
-        zIndex: 100,
-      }}>
+      <div className="bottom-nav">
         {tabs.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
+          <button key={t.id} onClick={() => changeTab(t.id)} style={{
             flex: 1, background: "none", border: "none", cursor: "pointer",
             display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
             padding: "4px 2px", fontFamily: "inherit",
