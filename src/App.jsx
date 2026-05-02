@@ -702,7 +702,7 @@ function RatingsModule({ onNotify }) {
             placeholder="Add a comment (optional)..."
             value={comment[d.id] || ""}
             onChange={e => setComment(p => ({ ...p, [d.id]: e.target.value }))}
-            style={{ width: "100%", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: 10, fontSize: 13, fontFamily: "inherit", resize: "none", background: "#f9fafb", boxSizing: "border-box", outline: "none" }}
+            style={{ width: "100%", border: "1.5px solid #e5e7eb", borderRadius: 10, padding: 10, fontSize: 13, fontFamily: "inherit", resize: "none", background: "#f9fafb", boxSizing: "border-box", outline: "none", color: "#111827" }}
             rows={2}
           />
 
